@@ -1600,6 +1600,10 @@ avtExplodeFilter::PostExecute(void)
 // 
 //  Modifications:
 //
+//      Alister Maguire, Wed Feb 27 11:24:56 PST 2019
+//      Added SetPointsWereTransformed(true) for the pick operator
+//      to function correctly. 
+//
 // ****************************************************************************
 
 void
@@ -1607,6 +1611,7 @@ avtExplodeFilter::UpdateDataObjectInfo(void)
 {
     GetOutput()->GetInfo().GetValidity().InvalidateDataMetaData();
     GetOutput()->GetInfo().GetValidity().InvalidateSpatialMetaData();
+    GetOutput()->GetInfo().GetValidity().SetPointsWereTransformed(true);
 
     //
     // The dataset has become disconnected and reorganized. 
