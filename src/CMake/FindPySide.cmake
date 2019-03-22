@@ -62,73 +62,96 @@
 #
 #****************************************************************************/
 
-INCLUDE(${VISIT_SOURCE_DIR}/CMake/SetUpThirdParty.cmake)
+include(${VISIT_SOURCE_DIR}/CMake/SetUpThirdParty.cmake)
 
-IF(VISIT_PYSIDE_DIR)
-    OPTION(PYSIDE_LIBNAMES_AFFIX_V "Whether PySide and Shiboken base names end with v" ON)
 
-    #  Find PySide 
-    set(CMAKE_PREFIX_PATH ${VISIT_PYSIDE_DIR}/lib/cmake/ ${CMAKE_PREFIX_PATH})
-    set(CMAKE_LIBRARY_PATH ${VISIT_PYSIDE_DIR}/lib ${CMAKE_LIBRARY_PATH})
 
-    set(PYSIDE_VERSION "2.0.0")
-    set(PYSIDE_SHORT_VERSION "2.0")
-    set(pyside_suffix "2")
 
-    if(NOT Shiboken${pyside_suffix}_FOUND)
-        find_package(Shiboken${pyside_suffix} ${PYSIDE_VERSION})
+
+
+if(VISIT_PYSIDE_DIR)
+    #option(PYSIDE_LIBNAMES_AFFIX_V "Whether PySide and Shiboken base names end with v" OFF)
+
+
+    # find_package will fail if cmake build type isn't set to what was used to
+    # build PySide2, assuming Release here
+    set(cmake_btype ${CMAKE_BUILD_TYPE})
+    set(CMAKE_BUILD_TYPE "Release")
+
+    if(NOT TARGET Shiboken2::shiboken2 AND NOT TARGET Shiboken2::libshiboken)
+        find_package(Shiboken2 ${PYSIDE_VERSION}
+                     PATHS ${VISIT_PYSIDE_DIR}/lib/cmake/Shiboken2-${PYSIDE_VERSION}
+                     NO_DEFAULT_PATH
+                     )
+        if(NOT TARGET Shiboken2::shiboken2)
+            message(WARNING "PySide2 requested, but could not find shiboken executable")
+            return()
+        endif()
+        if(NOT TARGET Shiboken2::libshiboken)
+            message(WARNING "PySide2 requested, but could not find shiboken library")
+            return()
+        endif()
+
+        get_target_property(SHIBOKEN_EXECUTABLE Shiboken2::shiboken2 IMPORTED_LOCATION_RELEASE)
+        get_target_property(SHIBOKEN_INCLUDE_DIRS Shiboken2::libshiboken INTERFACE_INCLUDE_DIRECTORIES)
     endif()
 
-    if (NOT PySide${pyside_suffix}_FOUND)
-        find_package(PySide${pyside_suffix} ${PYSIDE_VERSION})
+    if (NOT TARGET PySide2::pyside2)
+        find_package(PySide2 ${PYSIDE_VERSION}
+                    PATHS ${VISIT_PYSIDE_DIR}/lib/cmake/PySide2-${PYSIDE_VERSION}
+                    NO_DEFAULT_PATH)
+        if(NOT TARGET PySide2::pyside2)
+            message(WARNING "PySide2 requested, but could not find pyside library")
+            return()
+        endif()
+        get_target_property(PYSIDE_INCLUDE_DIR PySide2::pyside2 INTERFACE_INCLUDE_DIRECTORIES)
     endif()
 
-    IF(Shiboken${pyside_suffix}_FOUND)
-        SET(GENERATORRUNNER_BINARY ${SHIBOKEN_BINARY})
-    ENDIF()
+    set(pyside_qt_includes 
+        ${Qt5Core_INCLUDE_DIRS}
+        ${Qt5Gui_INCLUDE_DIRS}
+        ${Qt5Widgets_INCLUDE_DIRS}
+        ${Qt5OpenGL_INCLUDE_DIRS}
+        ${PYSIDE_INCLUDE_DIR}/QtCore
+        ${PYSIDE_INCLUDE_DIR}/QtGui
+        ${PYSIDE_INCLUDE_DIR}/QtOpenGL
+        ${PYSIDE_INCLUDE_DIR}/QtWidgets
+    )
 
-ENDIF(VISIT_PYSIDE_DIR)
+    set(CMAKE_BUILD_TYPE ${cmake_btype})
+    unset(cmake_btype)
+endif()
 
-IF(NOT PySide${pyside_suffix}_FOUND OR NOT Shiboken${pyside_suffix}_FOUND)
-    #If we dont have shiboken, force pyside off
-    MESSAGE(STATUS "PySide NOT found")
-    SET(PySide_FOUND 0)
-else()
-    SET(PySide_FOUND 1)
-ENDIF()
-
-IF(PySide_FOUND)
-    SET(pysidename "PySide2")
-
-    IF(NOT APPLE)
-        SET_UP_THIRD_PARTY(PYSIDE lib include 
-                pyside2-python${PYTHON_VERSION} shiboken2-python${PYTHON_VERSION})
-    ELSE(NOT APPLE)
-        IF(PYSIDE_LIBNAMES_AFFIX_V)
-                SET(PYTHON_VERSION_V ${PYTHON_VERSION}v)
-        ELSE(PYSIDE_LIBNAMES_AFFIX_V)
-                SET(PYTHON_VERSION_V ${PYTHON_VERSION})
-        ENDIF(PYSIDE_LIBNAMES_AFFIX_V)
-
-        SET(PySide2_LIBRARIES
-                pyside2-python${PYTHON_VERSION_V}
-                pyside2-python${PYTHON_VERSION_V}.${PYSIDE_VERSION}
-                pyside2-python${PYTHON_VERSION_V}.${PYSIDE_SHORT_VERSION})
-
-        SET(Shiboken2_LIBRARIES
-                shiboken2-python${PYTHON_VERSION_V}
-                shiboken2-python${PYTHON_VERSION_V}.${PYSIDE_VERSION}
-                shiboken2-python${PYTHON_VERSION_V}.${PYSIDE_SHORT_VERSION})
-        SET_UP_THIRD_PARTY(PYSIDE lib include ${PySide2_LIBRARIES} ${Shiboken2_LIBRARIES})
-    ENDIF(NOT APPLE)
+if(TARGET PySide2::pyside2 AND TARGET Shiboken2::libshiboken AND TARGET Shiboken2::shiboken2)
+    #IF(NOT APPLE)
+    #    SET_UP_THIRD_PARTY(PYSIDE lib include 
+    #            pyside2-python${PYTHON_VERSION} shiboken2-python${PYTHON_VERSION})
+    #ELSE(NOT APPLE)
+    #    IF(PYSIDE_LIBNAMES_AFFIX_V)
+    #            SET(PYTHON_VERSION_V ${PYTHON_VERSION}v)
+    #    ELSE(PYSIDE_LIBNAMES_AFFIX_V)
+    #            SET(PYTHON_VERSION_V ${PYTHON_VERSION})
+    #    ENDIF(PYSIDE_LIBNAMES_AFFIX_V)
+#
+#        SET(PySide2_LIBRARIES
+#                pyside2-python${PYTHON_VERSION_V}
+#                pyside2-python${PYTHON_VERSION_V}.${PYSIDE_VERSION}
+#                pyside2-python${PYTHON_VERSION_V}.${PYSIDE_SHORT_VERSION})
+#
+#        SET(Shiboken2_LIBRARIES
+#                shiboken2-python${PYTHON_VERSION_V}
+#                shiboken2-python${PYTHON_VERSION_V}.${PYSIDE_VERSION}
+#                shiboken2-python${PYTHON_VERSION_V}.${PYSIDE_SHORT_VERSION})
+#        SET_UP_THIRD_PARTY(PYSIDE lib include ${PySide2_LIBRARIES} ${Shiboken2_LIBRARIES})
+#    ENDIF(NOT APPLE)
     # The PySide module is symlinked into the python install VisIt uses for 
     # dev builds.  For 'make install' and 'make package' we need to actually 
     # install the PySide SOs.
-    SET(PYSIDE_MODULE_SRC  ${PYSIDE_PYTHONPATH}/${pysidename})
-    SET(PYSIDE_MODULE_INSTALLED_DIR ${VISIT_INSTALLED_VERSION_LIB}/site-packages/${pysidename})
+    set(PYSIDE_MODULE_SRC  ${PYSIDE_PYTHONPATH}/PySide2)
+    set(PYSIDE_MODULE_INSTALLED_DIR ${VISIT_INSTALLED_VERSION_LIB}/site-packages/PySide2)
 
-    FILE(GLOB pysidelibs ${PYSIDE_MODULE_SRC}/*)
-    INSTALL(FILES ${pysidelibs}
+    file(GLOB pysidelibs ${PYSIDE_MODULE_SRC}/*)
+    install(FILES ${pysidelibs}
             DESTINATION ${PYSIDE_MODULE_INSTALLED_DIR}
             PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE 
                         GROUP_READ GROUP_WRITE GROUP_EXECUTE 
@@ -136,7 +159,67 @@ IF(PySide_FOUND)
             CONFIGURATIONS "" None Debug Release RelWithDebInfo MinSizeRel
             PATTERN ".svn" EXCLUDE
             )
-ENDIF(PySide_FOUND)
+
+    unset(PYSIDE_MODULE_SRC)
+    unset(PYSIDE_MODULE_INSTALLED_DIR)
+    unset(pysidelibs)
+endif(PySide_FOUND)
+
+
+#****************************************************************************
+# PYSIDE_ADD_GENERATOR_TARGET
+# Defines a new PySide generator target.
+#****************************************************************************
+function(PYSIDE_ADD_GENERATOR_TARGET 
+            target_name gen_sources gen_include_paths gen_global gen_typesystem)
+
+    set(PYSIDE_GENERATOR_EXTRA_FLAGS 
+                                     --generator-set=shiboken 
+                                     --enable-parent-ctor-heuristic 
+                                     --enable-return-value-heuristic 
+                                     --avoid-protected-hack)
+
+    #
+    # Create string for --include-paths arg from gen_include_paths list.
+    #
+
+    if(WIN32)
+        set(gen_pathsep "\;")
+    else(WIN32)
+        set(gen_pathsep ":")
+    endif(WIN32)
+
+    set(gen_include_paths_arg "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    foreach(itm ${PYSIDE_INCLUDE_DIR})
+        set(gen_include_paths_arg "${gen_include_paths_arg}${gen_pathsep}${itm}")
+    endforeach()
+
+    foreach(itm ${${gen_include_paths}})
+        set(gen_include_paths_arg "${gen_include_paths_arg}${gen_pathsep}${itm}")
+    endforeach(itm ${gen_include_paths})
+
+    add_custom_command(OUTPUT ${${gen_sources}}
+        COMMAND ${CMAKE_COMMAND} -E env CLANG_INSTALL_DIR=${VISIT_LLVM_DIR}
+        ${SHIBOKEN_EXECUTABLE} ${PYSIDE_GENERATOR_EXTRA_FLAGS}
+        ${gen_global}
+        --include-paths=${gen_include_paths_arg}
+        --typesystem-paths=${PYSIDE_TYPESYSTEMS}
+        --output-directory=${CMAKE_CURRENT_BINARY_DIR}
+        ${gen_typesystem}
+        DEPENDS  ${gen_global} ${gen_typesystem}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Running generator for ${${gen_sources}}...")
+
+    add_custom_target(${target_name} DEPENDS ${${gen_sources}})
+
+    #cleanup
+    unset(PYSIDE_GENERATOR_EXTRA_FLAGS)
+    unset(gen_pathsep)
+    unset(gen_include_paths_arg)
+
+endfunction(PYSIDE_ADD_GENERATOR_TARGET)
+
 
 
 
@@ -146,7 +229,7 @@ ENDIF(PySide_FOUND)
 # Defines a new PySide module and creates a dependent generator target and
 # distutils setup call.
 #****************************************************************************
-FUNCTION(PYSIDE_ADD_MODULE module_name
+function(PYSIDE_ADD_MODULE module_name
                            dest_dir
                            mod_sources
                            mod_gen_sources
@@ -155,61 +238,59 @@ FUNCTION(PYSIDE_ADD_MODULE module_name
                            mod_gen_global
                            mod_gen_typesystem)
 
-MESSAGE(STATUS "Configuring PySide module: ${module_name}")
+    message(STATUS "Configuring PySide module: ${module_name}")
 
 
-PYSIDE_ADD_GENERATOR_TARGET("${module_name}_gen"
-                            ${mod_gen_sources}
-                            ${mod_gen_include_paths}
-                            ${mod_gen_global}
-                            ${mod_gen_typesystem})
+    PYSIDE_ADD_GENERATOR_TARGET("${module_name}_gen"
+                                ${mod_gen_sources}
+                                ${mod_gen_include_paths}
+                                ${mod_gen_global}
+                                ${mod_gen_typesystem})
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}
-                    ${SHIBOKEN_INCLUDE_DIR}
-                    ${SHIBOKEN_PYTHON_INCLUDE_DIR}
-                    ${PYSIDE_INCLUDE_DIR}
-                    ${CMAKE_CURRENT_BINARY_DIR}/${module_name}
-                    ${${mod_gen_include_paths}})
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}
+                        ${SHIBOKEN_INCLUDE_DIRS}
+                        ${PYSIDE_INCLUDE_DIR}
+                        ${CMAKE_CURRENT_BINARY_DIR}/${module_name}
+                        ${${mod_gen_include_paths}})
 
-add_library(${module_name} MODULE ${${mod_sources}} ${${mod_gen_sources}})
+    add_library(${module_name} MODULE ${${mod_sources}} ${${mod_gen_sources}})
 
-SET_TARGET_PROPERTIES(${module_name} PROPERTIES PREFIX "")
+    set_target_properties(${module_name} PROPERTIES PREFIX "")
 
-IF(UNIX)
-    SET_TARGET_PROPERTIES(${module_name} PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY ${VISIT_LIBRARY_DIR}/${dest_dir})
-ELSE(UNIX)
-    # set the appropriate suffix 
-    set_target_properties(${module_name} PROPERTIES SUFFIX ".pyd")
-
-    # Since cmake will append $(Configuration) to output directories, we need
-    # to override that by specifying LIBRARY_OUTPUT_DIRECTORY_${Configuration}
-    # for each configuration.
-    foreach(cfg ${CMAKE_CONFIGURATION_TYPES})
-        string(TOUPPER ${cfg} UCFG)
+    if(UNIX)
         set_target_properties(${module_name} PROPERTIES
-            LIBRARY_OUTPUT_DIRECTORY_${UCFG} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${cfg}/${dest_dir})
-    endforeach()
-ENDIF(UNIX)
+            LIBRARY_OUTPUT_DIRECTORY ${VISIT_LIBRARY_DIR}/${dest_dir})
+    else()
+        # set the appropriate suffix 
+        set_target_properties(${module_name} PROPERTIES SUFFIX ".pyd")
 
-target_link_libraries(${module_name}
-                      ${SHIBOKEN_PYTHON_LIBRARIES}
-                      ${SHIBOKEN_LIBRARY}
-                      ${PYSIDE_LIBRARY}
-                      ${${mod_gen_link_libs}})
+        # Since cmake will append $(Configuration) to output directories, we need
+        # to override that by specifying LIBRARY_OUTPUT_DIRECTORY_${Configuration}
+        # for each configuration.
+        foreach(cfg ${CMAKE_CONFIGURATION_TYPES})
+            string(TOUPPER ${cfg} UCFG)
+            set_target_properties(${module_name} PROPERTIES
+                LIBRARY_OUTPUT_DIRECTORY_${UCFG} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${cfg}/${dest_dir})
+        endforeach()
+    endif()
 
-add_dependencies(${module_name} "${module_name}_gen")
+    target_link_libraries(${module_name}
+                          Shiboken2::libshiboken
+                          PySide2::pyside2
+                          ${${mod_gen_link_libs}})
 
-VISIT_INSTALL_TARGETS_RELATIVE(${dest_dir} ${module_name})
+    add_dependencies(${module_name} "${module_name}_gen")
 
-ENDFUNCTION(PYSIDE_ADD_MODULE)
+    VISIT_INSTALL_TARGETS_RELATIVE(${dest_dir} ${module_name})
+
+endfunction(PYSIDE_ADD_MODULE)
 
 #****************************************************************************
 # PYSIDE_ADD_HYBRID_MODULE
 # Defines a new PySide module and creates a dependent generator target and
 # distutils setup call.
 #****************************************************************************
-FUNCTION(PYSIDE_ADD_HYBRID_MODULE module_name
+function(PYSIDE_ADD_HYBRID_MODULE module_name
                                   dest_dir
                                   mod_py_setup
                                   mod_py_sources
@@ -220,68 +301,25 @@ FUNCTION(PYSIDE_ADD_HYBRID_MODULE module_name
                                   mod_gen_global
                                   mod_gen_typesystem)
 
-MESSAGE(STATUS "Configuring PySide module: ${module_name}")
+    message(STATUS "Configuring PySide module: ${module_name}")
 
-PYTHON_ADD_DISTUTILS_SETUP("${module_name}_py_setup"
-                            ${dest_dir}
-                            ${mod_py_setup}
-                            ${mod_py_sources})
+    PYTHON_ADD_DISTUTILS_SETUP("${module_name}_py_setup"
+                                ${dest_dir}
+                                ${mod_py_setup}
+                                ${mod_py_sources})
 
-PYSIDE_ADD_MODULE(${module_name}
-                  ${dest_dir}/${module_name}
-                  ${mod_sources}
-                  ${mod_gen_sources}
-                  ${mod_gen_include_paths}
-                  ${mod_gen_link_libs}
-                  ${mod_gen_global}
-                  ${mod_gen_typesystem})
+    PYSIDE_ADD_MODULE(${module_name}
+                      ${dest_dir}/${module_name}
+                      ${mod_sources}
+                      ${mod_gen_sources}
+                      ${mod_gen_include_paths}
+                      ${mod_gen_link_libs}
+                      ${mod_gen_global}
+                      ${mod_gen_typesystem})
 
-add_dependencies(${module_name} "${module_name}_py_setup")
-add_dependencies(${module_name} "${module_name}_gen")
+    add_dependencies(${module_name} "${module_name}_py_setup")
+    add_dependencies(${module_name} "${module_name}_gen")
 
-ENDFUNCTION(PYSIDE_ADD_HYBRID_MODULE)
+endfunction(PYSIDE_ADD_HYBRID_MODULE)
 
-
-#****************************************************************************
-# PYSIDE_ADD_GENERATOR_TARGET
-# Defines a new PySide generator target.
-#****************************************************************************
-FUNCTION(PYSIDE_ADD_GENERATOR_TARGET 
-            target_name gen_sources gen_include_paths gen_global gen_typesystem)
-
-set(PYSIDE_GENERATOR_EXTRA_FLAGS --silent 
-                                 --generator-set=shiboken 
-                                 --enable-parent-ctor-heuristic 
-                                 --enable-return-value-heuristic 
-                                 --avoid-protected-hack)
-
-#
-# Create string for --include-paths arg from gen_include_paths list.
-#
-
-IF(WIN32)
-    set(gen_pathsep "\;")
-ELSE(WIN32)
-    set(gen_pathsep ":")
-ENDIF(WIN32)
-
-SET(gen_include_paths_arg "${CMAKE_CURRENT_SOURCE_DIR}")
-
-FOREACH(itm ${${gen_include_paths}})
-    SET(gen_include_paths_arg "${gen_include_paths_arg}${gen_pathsep}${itm}")
-ENDFOREACH(itm ${gen_include_paths})
-
-add_custom_command(OUTPUT ${${gen_sources}}
-                   COMMAND ${GENERATORRUNNER_BINARY} ${PYSIDE_GENERATOR_EXTRA_FLAGS}
-                   ${gen_global}
-                   --include-paths=${gen_include_paths_arg}
-                   --typesystem-paths=${PYSIDE_TYPESYSTEMS}
-                   --output-directory=${CMAKE_CURRENT_BINARY_DIR}
-                   ${gen_typesystem}
-                   DEPENDS  ${gen_global} ${gen_typesystem}
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                   COMMENT "Running generator for ${${gen_sources}}...")
-
-add_custom_target(${target_name} DEPENDS ${${gen_sources}})
-ENDFUNCTION(PYSIDE_ADD_GENERATOR_TARGET)
 

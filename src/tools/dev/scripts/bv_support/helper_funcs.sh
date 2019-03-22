@@ -631,6 +631,12 @@ function check_if_installed
 # Programmer: Cyrus Harrison                                                  #
 # Date: Fri Nov 14 08:23:26 PST 2008                                          #
 #                                                                             #
+# Modifications:                                                              #
+#    Kathleen Biagas, Wed Feb 20 14:38:24 PST 2019                            #
+#    Use a module's 'is_installed' method instead of 'check_if_installed'.    #
+#    This allows for installs different than the norm. Most modules call      #
+#    'check_if_installed' in their own 'if_installed' method anyway.          # 
+#                                                                             #
 # *************************************************************************** #
 function ensure_built_or_ready
 {
@@ -646,8 +652,8 @@ function ensure_built_or_ready
     ALREADY_INSTALLED="NO"
     HAVE_TARBALL="NO"
 
-    check_if_installed $BUILD_NAME $BUILD_VERSION
-    if [[ $? == 0 || -d $BUILD_DIR ]] ; then
+    bv_${BUILD_NAME}_is_installed 
+    if [[ $? == 1 ]] ; then
         ALREADY_INSTALLED="YES"
     fi
     if [[ -e ${SRC_FILE%.gz} || -e ${SRC_FILE} ]] ; then

@@ -42,20 +42,16 @@
 #    Kathleen Biagas, Tue Jan 24 11:06:12 PST 2017
 #    Add support for Qt5.
 #
+#    Kathleen Biagas, Thu Mar 21 09:53:33 PDT 2019
+#    All qt/pyside related includes handled by pyside_qt_includes.
+#    All PySide and Shiboken includes handed by PYSIDE_ADD_MODULE.
 #*****************************************************************************
 
 set(pyside_gui_include_paths
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${SHIBOKEN_INCLUDE_DIR}
-    ${SHIBOKEN_PYTHON_INCLUDE_DIR}
-    ${PYSIDE_INCLUDE_DIR}
     ${pyside_qt_includes}
-    ${PYSIDE_INCLUDE_DIR}
-    ${PYSIDE_INCLUDE_DIR}/QtCore
-    ${PYSIDE_INCLUDE_DIR}/QtGui
-    ${PYSIDE_INCLUDE_DIR}/QtOpenGL
-    ${PYSIDE_INCLUDE_DIR}/QtWidgets
-    ${VISIT_SOURCE_DIR}/gui/
+    ${VISIT_BINARY_DIR}/include
+    ${VISIT_SOURCE_DIR}/gui
     ${VISIT_SOURCE_DIR}/gui/main
     ${VISIT_SOURCE_DIR}/viewer/subjectproxy
     ${VISIT_SOURCE_DIR}/viewer/core
@@ -70,7 +66,7 @@ set(pyside_gui_include_paths
     ${VISIT_SOURCE_DIR}/common/comm
     ${VISIT_SOURCE_DIR}/common/plugin
     ${VISIT_SOURCE_DIR}/common/Exceptions/Pipeline
-    ${VISIT_SOURCE_DIR}/avt/DBAtts/MetaData/
+    ${VISIT_SOURCE_DIR}/avt/DBAtts/MetaData
     ${VISIT_SOURCE_DIR}/avt/DBAtts/SIL
     ${VISIT_SOURCE_DIR}/avt/Math
     ${VISIT_SOURCE_DIR}/avt/VisWindow/VisWindow
@@ -79,13 +75,7 @@ set(pyside_gui_include_paths
 )
 
 set(pyside_gui_link_libs
-    #gui
     guiwrapper
-    #viewersubjectproxy
-    #${SHIBOKEN_PYTHON_LIBRARIES}
-    #${SHIBOKEN_LIBRARY}
-    #${PYSIDE_LIBRARY}
-    #${QT_QTCORE_LIBRARY}
     ${QWT_LIBRARY}
     )
 

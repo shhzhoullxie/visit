@@ -19,6 +19,7 @@
             <lib name="ccmio"/>
             <lib name="cfitsio"/>
             <lib name="cgns"/>
+            <lib name="clang"/>
             <lib name="conduit"/>
             <lib name="embree"/>
             <lib name="fastbit"/>
@@ -75,6 +76,7 @@
             <lib name="boxlib"/>
             <lib name="ccmio"/>
             <lib name="cfitsio"/>
+            <lib name="clang"/>
             <lib name="cgns"/>
             <lib name="conduit"/>
             <lib name="embree"/>
@@ -94,6 +96,7 @@
             <lib name="openexr"/>
             <lib name="openssl"/>
             <lib name="ospray"/>
+            <lib name="pyside"/>
             <lib name="p7zip"/>
             <lib name="pidx"/>
             <lib name="silo"/>

@@ -37,14 +37,16 @@
 # Modifications:
 #****************************************************************************/
 
-IF(HAVE_LIBPYSIDE OR HAVE_LIBPYQT)
-    ADD_SUBDIRECTORY(common)
-ENDIF()
+if((TARGET PySide2::pyside2 AND TARGET Shiboken2::shiboken2 AND
+    TARGET Shiboken2::libshiboken) OR HAVE_LIBPYQT)
+    add_subdirectory(common)
+endif()
 
-IF(HAVE_LIBPYSIDE)
-    ADD_SUBDIRECTORY(pyside)
-ENDIF()
+if(TARGET PySide2::pyside2 AND TARGET Shiboken2::shiboken2 AND
+   TARGET Shiboken2::libshiboken)
+    add_subdirectory(pyside)
+endif()
 
-IF(HAVE_LIBPYQT AND VISIT_SIP_DIR)
-    ADD_SUBDIRECTORY(pyqt)
-ENDIF(HAVE_LIBPYQT AND VISIT_SIP_DIR)
+if(HAVE_LIBPYQT AND VISIT_SIP_DIR)
+    add_subdirectory(pyqt)
+endif()

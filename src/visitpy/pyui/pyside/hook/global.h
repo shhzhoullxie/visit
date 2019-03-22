@@ -8,5 +8,5 @@
 
 #include <QtCore/QtCore>
 #include <PySideHook.h>
-#include <pyside_global.h>
+#include <pyside2_global.h>
 

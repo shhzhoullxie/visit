@@ -2,11 +2,8 @@ function bv_pyside_initialize
 {
     if [[ "$DO_STATIC_BUILD" == "no" ]]; then
         export DO_PYSIDE="yes"
-        export USE_SYSTEM_PYSIDE="no"
-        add_extra_commandline_args "pyside" "alt-pyside-dir" 1 "Use alternative directory for pyside"
     else
         export DO_PYSIDE="no"
-        export USE_SYSTEM_PYSIDE="no"
     fi
 }
 
@@ -21,21 +18,9 @@ function bv_pyside_disable
     DO_PYSIDE="no"
 }
 
-function bv_pyside_alt_pyside_dir
-{
-    bv_pyside_enable 
-    USE_SYSTEM_PYSIDE="yes"
-    PYSIDE_INSTALL_DIR="$1"
-    info "using alternative pyside directory: $PYSIDE_INSTALL_DIR" 
-}
-
 function bv_pyside_depends_on
 {
-    if [[ "$USE_SYSTEM_PYSIDE" == "yes" ]]; then
-        echo ""
-    else
-        echo "cmake python qt"
-    fi
+    echo "clang cmake python qt"
 }
 
 function bv_pyside_initialize_vars
@@ -45,9 +30,11 @@ function bv_pyside_initialize_vars
 
 function bv_pyside_info
 {
-    export PYSIDE_VERSION=${PYSIDE_VERSION:-"2.0.0-2017.08.30"}
-    export PYSIDE_FILE=${PYSIDE_FILE:-"pyside2-combined.2017.08.30.tar.gz"}
-    export PYSIDE_BUILD_DIR=${PYSIDE_BUILD_DIR:-"pyside2-combined"}
+    # should match qt version
+    export PYSIDE_VERSION=${PYSIDE_VERSION:-"5.12.2"}
+    export PYSIDE_FILE=${PYSIDE_FILE:-"pyside-setup-${PYSIDE_VERSION}.tar.gz"}
+    export PYSIDE_SOURCE_DIR=${PYSIDE_SOURCE_DIR:-"pyside-setup-${PYSIDE_VERSION}"}
+    export PYSIDE_BUILD_DIR=${PYSIDE_BUILD_DIR:-"pyside-setup-${PYSIDE_VERSION}-build"}
     export PYSIDE_MD5_CHECKSUM=""
     export PYSIDE_SHA256_CHECKSUM=""
 }
@@ -63,9 +50,6 @@ function bv_pyside_print
 function bv_pyside_print_usage
 {
     printf "%-20s %s [%s]\n" "--pyside" "Build PySide" "$DO_PYSIDE"
-    if [[ "$DO_STATIC_BUILD" == "no" ]]; then
-        printf "%-20s %s [%s]\n" "--alt-pyside-dir" "Use PySide from an alternative directory"
-    fi
 }
 
 function bv_pyside_host_profile
@@ -75,17 +59,14 @@ function bv_pyside_host_profile
         echo "##" >> $HOSTCONF
         echo "## PySide" >> $HOSTCONF
         echo "##" >> $HOSTCONF
-        if [[ "$USE_SYSTEM_PYSIDE" == "yes" ]]; then
-            echo "VISIT_OPTION_DEFAULT(VISIT_PYSIDE_DIR $PYSIDE_INSTALL_DIR)" >> $HOSTCONF
-        else
-            echo "VISIT_OPTION_DEFAULT(VISIT_PYSIDE_DIR \${VISITHOME}/pyside/$PYSIDE_VERSION/\${VISITARCH}/)" >> $HOSTCONF
-        fi
+        echo "SETUP_APP_VERSION(PYSIDE $PYSIDE_VERSION)" >> $HOSTCONF
+        echo "VISIT_OPTION_DEFAULT(VISIT_PYSIDE_DIR \${VISITHOME}/pyside/\${PYSIDE_VERSION}/\${VISITARCH}/)" >> $HOSTCONF
     fi
 }
 
 function bv_pyside_ensure
 {
-    if [[ "$DO_PYSIDE" = "yes" && "$DO_SERVER_COMPONENTS_ONLY" == "no" && "$USE_SYSTEM_PYSIDE" == "no" ]] ; then
+    if [[ "$DO_PYSIDE" = "yes" && "$DO_SERVER_COMPONENTS_ONLY" == "no" ]] ; then
         ensure_built_or_ready "pyside"     $PYSIDE_VERSION    $PYSIDE_BUILD_DIR    $PYSIDE_FILE 
         if [[ $? != 0 ]] ; then
             ANY_ERRORS="yes"
@@ -102,16 +83,112 @@ function bv_pyside_dry_run
     fi
 }
 
+function apply_pyside_5122_patch
+{
+  info "Patching pyside 5.12.2"
+  patch -p0 << \EOF
+ diff -c sources/pyside2/PySide2/QtQml/CMakeLists.txt.orig sources/pyside2/PySide2/QtQml/CMakeLists.txt
+*** sources/pyside2/PySide2/QtQml/CMakeLists.txt.orig   2019-02-26 15:27:58.303596033 -0800
+--- sources/pyside2/PySide2/QtQml/CMakeLists.txt        2019-02-26 15:28:05.316595289 -0800
+***************
+*** 11,17 ****
+  ${QtQml_GEN_DIR}/qqmlcomponent_wrapper.cpp
+  ${QtQml_GEN_DIR}/qqmlcontext_wrapper.cpp
+  ${QtQml_GEN_DIR}/qqmlerror_wrapper.cpp
+! ${QtQml_GEN_DIR}/qqmldebuggingenabler_wrapper.cpp
+  ${QtQml_GEN_DIR}/qqmlengine_wrapper.cpp
+  ${QtQml_GEN_DIR}/qqmlexpression_wrapper.cpp
+  ${QtQml_GEN_DIR}/qqmlextensioninterface_wrapper.cpp
+--- 11,17 ----
+  ${QtQml_GEN_DIR}/qqmlcomponent_wrapper.cpp
+  ${QtQml_GEN_DIR}/qqmlcontext_wrapper.cpp
+  ${QtQml_GEN_DIR}/qqmlerror_wrapper.cpp
+! #${QtQml_GEN_DIR}/qqmldebuggingenabler_wrapper.cpp
+  ${QtQml_GEN_DIR}/qqmlengine_wrapper.cpp
+  ${QtQml_GEN_DIR}/qqmlexpression_wrapper.cpp
+  ${QtQml_GEN_DIR}/qqmlextensioninterface_wrapper.cpp
+
+EOF
+    if [[ $? != 0 ]] ; then
+        warn "pyside 5.12.2 patch failed."
+        return 1
+    fi
+
+    return 0;
+}
+
+function apply_pyside_patch
+{
+    if [[ ${PYSIDE_VERSION} == 5.12.2 ]] ; then
+        apply_pyside_5122_patch
+        if [[ $? != 0 ]] ; then
+            return 1
+        fi
+    fi
+ 
+    return 0
+}
+
 # *************************************************************************** #
 #                          Function 4.2, build_pyside                          #
 # *************************************************************************** #
 
-function build_pyside_component
+function build_pyside
 {
+   # Extract the sources
+    if [[ -d $PYSIDE_SOURCE_DIR ]] ; then
+        if [[ ! -f $PYSIDE_FILE ]] ; then
+            warn "The PySide directory exists, deleting before uncompressing"
+            rm -Rf $PYSIDE_SOURCE_DIR
+            ensure_built_or_ready $PYSIDE_INSTALL_DIR    $PYSIDE_VERSION    $PYSIDE_SOURCE_DIR    $PYSIDE_FILE
+        fi
+    fi
+
+    #
+    # Prepare the build dir using src file.
+    #
+    prepare_build_dir $PYSIDE_SOURCE_DIR $PYSIDE_FILE
+    untarred_pyside=$?
+    # 0, already exists, 1 untarred src, 2 error
+
+    if [[ $untarred_pyside == -1 ]] ; then
+        warn "Unable to prepare PySide source directory. Giving Up!"
+        return 1
+    fi
+
+    #
+    # Apply patches
+    #
+    info "Patching PySide . . . "
+    cd $PYSIDE_SOURCE_DIR || error "Can't cd to PySide source dir."
+    apply_pyside_patch
+    if [[ $? != 0 ]] ; then
+        if [[ $untarred_pyside == 1 ]] ; then
+            warn "Giving up on pyside build because the patch failed."
+            return 1
+        else
+            warn "Patch failed, but continuing. I believe that this script\n" \
+                 "tried to apply a patch to an existing directory that had\n" \
+                 "already been patched ... that is, the patch is\n" \
+                 "failing harmlessly on a second application."
+        fi
+    fi
+
+    cd $START_DIR
+    if [[ ! -d $PYSIDE_BUILD_DIR ]] ; then
+        echo "Making build directory $PYSIDE_BUILD_DIR"
+        mkdir $PYSIDE_BUILD_DIR
+    fi
+
+    #rm -Rf ${PYSIDE_BUILD_DIR}/CMakeCache.txt ${PYSIDE_BUILD_DIR}/*/CMakeCache.txt
+
+
     VISIT_PYSIDE_DIR="${VISITDIR}/pyside/${PYSIDE_VERSION}/${VISITARCH}/"
 
+    export CLANG_INSTALL_DIR=${VISIT_LLVM_DIR}
     export PATH=${QT_BIN_DIR}:$PATH
-    export PATH=$VISIT_PYSIDE_DIR/bin:$VISIT_PYTHON_DIR/bin:$PATH
+    #export PATH=$VISIT_PYSIDE_DIR/bin:$VISIT_PYTHON_DIR/bin:$PATH
+    export PATH=$VISIT_PYTHON_DIR/bin:$PATH
     export PYTHONPATH=$VISIT_PYSIDE_DIR/lib/python${PYTHON_COMPATIBILITY_VERSION}/site-packages:$PYTHONPATH
     export PKG_CONFIG_PATH=$VISIT_PYSIDE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH
 
@@ -127,7 +204,6 @@ function build_pyside_component
         ALTERNATIVE_QT_INCLUDE_DIR="$QT_LIB_DIR"
     fi
 
-    cd $1
     #
     # Make sure to pass compilers and compiler flags to cmake
     #
@@ -145,164 +221,37 @@ function build_pyside_component
     popts="${popts} -DCMAKE_BUILD_TYPE:STRING=\"${VISIT_BUILD_MODE}\""
     popts="${popts} -DALTERNATIVE_QT_INCLUDE_DIR:FILEPATH=\"$ALTERNATIVE_QT_INCLUDE_DIR\""
     popts="${popts} -DQT_QMAKE_EXECUTABLE:FILEPATH=\"$QT_QMAKE_COMMAND\""
+    popts="${popts} -DBUILD_TESTS:BOOL=false"
     popts="${popts} -DENABLE_ICECC:BOOL=false"
-    popts="${popts} -DShiboken_DIR:FILEPATH=\"$VISIT_PYSIDE_DIR/lib/\""
+    popts="${popts} -DENABLE_VERSION_SUFFIX:BOOL=false"
     popts="${popts} -DPYTHON_EXECUTABLE:FILEPATH=\"$PYTHON_COMMAND\""
     popts="${popts} -DPYTHON_INCLUDE_PATH:FILEPATH=\"$PYTHON_INCLUDE_DIR\""
     popts="${popts} -DPYTHON_LIBRARY:FILEPATH=\"$PYTHON_LIBRARY\""
     popts="${popts} -DDISABLE_DOCSTRINGS:BOOL=true"
-
-    popts="${popts} -DBUILD_TESTS:BOOL=false"
-    popts="${popts} -DENABLE_VERSION_SUFFIX:BOOL=false"
     popts="${popts} -DCMAKE_PREFIX_PATH=${QT_INSTALL_DIR}/lib/cmake"
 
-    info "Configuring pyside/$1 . . ."
+    if [[ "$DO_MESAGL" == "yes" ]] ; then
+        popts="${popts} -DGL_H=${MESAGL_INCLUDE_DIR}/GL/gl.h"
+    fi
+    info "Configuring pyside . . ."
     CMAKE_BIN="${CMAKE_INSTALL}/cmake"
-    mkdir -p build
-    cd build #PySide fails during in source build..
 
+    info "pyside build dir ${PYSIDE_BUILD_DIR}"
+    cd $PYSIDE_BUILD_DIR || error "Can't cd to PySide build dir."
 
     if test -e bv_run_cmake.sh ; then
         rm -f bv_run_cmake.sh
     fi
-    echo "\"${CMAKE_BIN}\"" ${popts} ../ > bv_run_cmake.sh
-
+    echo "\"${CMAKE_BIN}\"" ${popts} ../${PYSIDE_SOURCE_DIR} > bv_run_cmake.sh
     cat bv_run_cmake.sh
-    issue_command bash bv_run_cmake.sh || error "pyside/$1 configuration failed."
+    issue_command bash bv_run_cmake.sh || error "pyside configuration failed."
 
-    if [[ $? != 0 ]] ; then
-        warn "Cannot configure pyside/$1, giving up."
-        return 1
-    fi
+    info "Building pyside . . ."
+    $MAKE $MAKE_OPT_FLAGS || \
+        error "PySide did not build correctly. Giving up."
 
-    info "Building pyside/$1 . . ."
-    $MAKE $MAKE_OPT_FLAGS
-    if [[ $? != 0 ]] ; then
-        warn "Cannot build pyside/$1, giving up."
-        return 1
-    fi
-
-    info "Installing pyside/$1 . . ."
-    $MAKE install
-    touch "${VISIT_PYSIDE_DIR}/$1_success"
-    info "Successfully built pyside/$1"
-    cd ../../
-}
-
-function apply_pyside_2_0_0_patch
-{
-    info "Patching Pyside2"
-    patch -p0 << \EOF
-diff -c pyside2-combined/pyside2/orig/CMakeLists.txt pyside2-combined/pyside2/CMakeLists.txt 
-*** pyside2-combined/pyside2/orig/CMakeLists.txt        Thu Dec 14 16:03:50 2017
---- pyside2-combined/pyside2/CMakeLists.txt     Thu Dec 14 16:06:34 2017
-***************
-*** 273,280 ****
-  COLLECT_MODULE_IF_FOUND(Xml)
-  COLLECT_MODULE_IF_FOUND(XmlPatterns opt)
-  COLLECT_MODULE_IF_FOUND(Help opt)
-! COLLECT_MODULE_IF_FOUND(Multimedia opt)
-! COLLECT_MODULE_IF_FOUND(MultimediaWidgets opt)
-  COLLECT_MODULE_IF_FOUND(OpenGL opt)
-  COLLECT_MODULE_IF_FOUND(Qml opt)
-  COLLECT_MODULE_IF_FOUND(Quick opt)
---- 273,282 ----
-  COLLECT_MODULE_IF_FOUND(Xml)
-  COLLECT_MODULE_IF_FOUND(XmlPatterns opt)
-  COLLECT_MODULE_IF_FOUND(Help opt)
-! #COLLECT_MODULE_IF_FOUND(Multimedia opt)
-! set(DISABLE_QtMultimedia 1)
-! #COLLECT_MODULE_IF_FOUND(MultimediaWidgets opt)
-! set(DISABLE_QtMultimediaWidgets 1)
-  COLLECT_MODULE_IF_FOUND(OpenGL opt)
-  COLLECT_MODULE_IF_FOUND(Qml opt)
-  COLLECT_MODULE_IF_FOUND(Quick opt)
-***************
-*** 297,304 ****
-  # still forgotten:
-  #COLLECT_MODULE_IF_FOUND(WebEngineCore opt)
-  #COLLECT_MODULE_IF_FOUND(WebEngine opt)
-! COLLECT_MODULE_IF_FOUND(WebEngineWidgets opt)
-! COLLECT_MODULE_IF_FOUND(WebKit opt)
-  if(NOT MSVC)
-      # right now this does not build on windows
-      COLLECT_MODULE_IF_FOUND(WebKitWidgets opt)
---- 299,306 ----
-  # still forgotten:
-  #COLLECT_MODULE_IF_FOUND(WebEngineCore opt)
-  #COLLECT_MODULE_IF_FOUND(WebEngine opt)
-! #COLLECT_MODULE_IF_FOUND(WebEngineWidgets opt)
-! #COLLECT_MODULE_IF_FOUND(WebKit opt)
-  if(NOT MSVC)
-      # right now this does not build on windows
-      COLLECT_MODULE_IF_FOUND(WebKitWidgets opt)
-EOF
-    if [[ $? != 0 ]] ; then
-        warn "Pyside2 patch failed."
-        return 1
-    fi
-
-    return 0
-}
-
-function apply_pyside_patch
-{
-    if [[ ${PYSIDE_VERSION} == 2.0.0-2017.08.30 ]] ; then
-        apply_pyside_2_0_0_patch
-        if [[ $? != 0 ]] ; then
-            return 1
-        fi
-    fi
-
-    return 0
-}
-
-function build_pyside
-{
-    ##
-    ## Prepare the build dir using src file.
-    ##
-
-    prepare_build_dir $PYSIDE_BUILD_DIR $PYSIDE_FILE
-    untarred_pyside=$?
-    ## 0, already exists, 1  untarred src, 2 error
-
-    if [[ untarred_pyside == -1 ]] ; then
-        warn "Unable to prepare PySide build directory. Giving Up!"
-        return 1
-    fi
-
-    ##
-    ## Apply patches
-    ##
-
-    apply_pyside_patch
-    if [[ $? != 0 ]] ; then
-        if [[ $untarred_pyside == 1 ]] ; then
-            warn "Giving up on pyside build because the patch failed."
-            return 1
-        else
-            warn "Patch failed, but continuing. I believe that this script\n" \
-                 "tried to apply a patch to an existing directory that had\n" \
-                 "already been patched ... that is, the patch is\n" \
-                 "failing harmlessly on a second application."
-        fi
-    fi
-
-    cd $PYSIDE_BUILD_DIR || error "Can't cd to PySide build dir."
-
-
-    build_pyside_component shiboken2
-
-    if [[ $? != 0 ]] ; then
-        return 1
-    fi
-
-    build_pyside_component pyside2
-
-    if [[ $? != 0 ]] ; then
-        return 1
-    fi
+    info "Installing pyside . . ."
+    $MAKE install || error "PySide did not install correctly."
 
     if [[ "$DO_GROUP" == "yes" ]] ; then
         chmod -R ug+w,a+rX "$VISITDIR/pyside"
@@ -329,19 +278,9 @@ function bv_pyside_is_enabled
 
 function bv_pyside_is_installed
 {
-    if [[ "$USE_SYSTEM_PYSIDE" == "yes" ]]; then 
-        return 1
-    fi
-
     VISIT_PYSIDE_DIR="${VISITDIR}/pyside/${PYSIDE_VERSION}/${VISITARCH}/"
     check_if_installed "pyside" $PYSIDE_VERSION
     if [[ $? != 0 ]] ; then
-        return 0
-    fi
-
-    if  [[ ! -e "${VISIT_PYSIDE_DIR}/shiboken2_success" ||
-             ! -e "${VISIT_PYSIDE_DIR}/pyside2_success" ]]; then
-        info "pyside not installed completely"
         return 0
     fi
     return 1
@@ -353,7 +292,7 @@ function bv_pyside_build
     # Build PySide
     #
     cd "$START_DIR"
-    if [[ "$DO_PYSIDE" == "yes" && "$DO_SERVER_COMPONENTS_ONLY" == "no" && "$USE_SYSTEM_PYSIDE" == "no" ]] ; then
+    if [[ "$DO_PYSIDE" == "yes" && "$DO_SERVER_COMPONENTS_ONLY" == "no" ]] ; then
         bv_pyside_is_installed #this returns 1 for true, 0 for false
         if [[ $? != 0 ]] ; then
             info "Skipping PySide build.  PySide is already installed."

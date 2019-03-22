@@ -78,7 +78,7 @@ function bv_qt_initialize_vars
     info "initalizing qt vars"
     if [[ $USE_SYSTEM_QT != "yes" ]]; then
         QT_INSTALL_DIR="${VISITDIR}/qt/${QT_VERSION}/${VISITARCH}"
-        QT_QMAKE_COMMAND="${QT_INSTALL_DIR}/bin/qmake"
+        export QT_QMAKE_COMMAND="${QT_INSTALL_DIR}/bin/qmake"
         if [[ -e "$QT_QMAKE_COMMAND" ]]; then
             QT_BIN_DIR=`$QT_QMAKE_COMMAND -query QT_INSTALL_BINS`
             QT_INCLUDE_DIR=`$QT_QMAKE_COMMAND -query QT_INSTALL_HEADERS`
@@ -106,10 +106,12 @@ function bv_qt_info
 {
     bv_qt_enable
 
-    export QT_VERSION=${QT_VERSION:-"5.10.1"}
+    export QT_VERSION=${QT_VERSION:-"5.12.0"}
+    export QT_SHORT_VERSION=${QT_SHORT_VERSION:-"5.12"}
     export QT_FILE=${QT_FILE:-"qt-everywhere-src-${QT_VERSION}.tar.xz"}
-    export QT_MD5_CHECKSUM=${QT_MD5_CHECKSUM:-"7e167b9617e7bd64012daaacb85477af"}
-    export QT_SHA256_CHECKSUM=${QT_SHA256_CHECKSUM:-"05ffba7b811b854ed558abf2be2ddbd3bb6ddd0b60ea4b5da75d277ac15e740a"}
+    export QT_URL=${QT_URL:-"http://download.qt.io/archive/qt/${QT_SHORT_VERSION}/${QT_VERSION}/single"}
+    export QT_MD5_CHECKSUM=""
+    export QT_SHA256_CHECKSUM=""
 
     export QT_BUILD_DIR=${QT_BUILD_DIR:-"${QT_FILE%.tar*}"}
     export QT_BIN_DIR=${QT_BIN_DIR:-"${QT_BUILD_DIR}/bin"}
@@ -157,7 +159,7 @@ function bv_qt_host_profile
 function bv_qt_ensure
 {
     if [[ "$DO_QT" == "yes"  && "$USE_SYSTEM_QT" == "no" && "$DO_SERVER_COMPONENTS_ONLY" == "no" ]] ; then
-        ensure_built_or_ready "qt"     $QT_VERSION    $QT_BUILD_DIR    $QT_FILE
+        ensure_built_or_ready "qt"     $QT_VERSION    $QT_BUILD_DIR    $QT_FILE  $QT_URL
         if [[ $? != 0 ]] ; then
             return 1
         fi
